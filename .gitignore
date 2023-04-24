@@ -1,9 +1,24 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
 # dependencies
-node_modules
-package-lock.json
+node_modules/
+.pnp/
+.pnp.js
 
-# logs
-npm-debug.log
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# VSCode
-.vscode/
+# env files
+.env*
+
+# turbo
+.turbo
+
+# production
+dist/
+
+# vscode
+.vscode
