@@ -6,10 +6,11 @@ import open from "open";
 import sleep from "delay";
 import semver from "semver";
 
-import * as logger from "./lib/logger.js";
 import { connect } from "./lib/connect.js";
 import { getTags } from "./lib/get-tags.js";
+import * as logger from "./lib/logger.js";
 import { getRepo, branchSynced } from "./lib/repo.js";
+import * as handleSpinner from "./lib/spinner.js";
 import type { GithubConnection, RepoDetails, Commit } from "./types.js";
 
 // Utilities
@@ -18,7 +19,6 @@ const getCommits = require("../lib/commits");
 const getChoices = require("../lib/choices");
 const definitions = require("../lib/definitions");
 const createChangelog = require("../lib/changelog");
-const { fail, create: createSpinner } = require("../lib/spinner");
 const bumpVersion = require("../lib/bump");
 const applyHook = require("../lib/hook");
 
@@ -85,13 +85,13 @@ const getReleaseURL = (
 const createRelease = async (
     tag: {
         tag: string;
-        hash: string;
+        hash?: string;
     },
     changelog: string,
-    exists: number
+    exists: number | false
 ) => {
     const isPre = flags.pre ? "pre" : "";
-    createSpinner(`Uploading ${isPre}release`);
+    handleSpinner.create(`Uploading ${isPre}release`);
 
     const { pre, publish, showUrl } = flags;
 
@@ -123,10 +123,10 @@ const createRelease = async (
 
     if (!response.data) {
         console.log("\n");
-        fail("Failed to upload release.");
+        handleSpinner.fail("Failed to upload release.");
     }
 
-    global.spinner.succeed();
+    handleSpinner.spinner.succeed();
     const releaseURL = getReleaseURL(response.data, !publish);
 
     if (!releaseURL) {
@@ -152,9 +152,24 @@ const createRelease = async (
     logger.info(`\n${chalk.bold("Done!")} ${releaseURL}`);
 };
 
-const orderCommits = async (commits: any, tags: Commit[], exists: number | false) => {
-    const questions = [];
-    const predefined = {};
+const orderCommits = async (
+    commits: any,
+    tags: Commit[],
+    exists: number | false
+) => {
+    const questions: {
+        name: string;
+        message: string;
+        type: string;
+        choices: any;
+    }[] = [];
+    const predefined: Record<
+        string,
+        {
+            type: string;
+            message: string;
+        }
+    > = {};
 
     const choices = getChoices(changeTypes, tags);
 
@@ -241,14 +256,14 @@ const orderCommits = async (commits: any, tags: Commit[], exists: number | false
         });
     }
 
-    global.spinner.succeed();
+    handleSpinner.spinner.succeed();
 
     // Prevents the spinner from getting succeeded
     // again once new spinner gets created
-    global.spinner.clear();
+    handleSpinner.spinner.clear();
 
     // By default, nothing is there yet
-    let answers = {};
+    let answers: Awaited<ReturnType<typeof inquirer.prompt>> = {};
 
     if (choices && questions.length > 0) {
         console.log(
@@ -265,9 +280,8 @@ const orderCommits = async (commits: any, tags: Commit[], exists: number | false
             }
 
             const type = answers[answer];
-            const { message } = questions.find(
-                (question) => question.name === answer
-            );
+            const { message } =
+                questions.find((question) => question.name === answer) ?? {};
 
             answers[answer] = {
                 type,
@@ -281,7 +295,7 @@ const orderCommits = async (commits: any, tags: Commit[], exists: number | false
         }
     }
 
-    createSpinner("Generating the changelog");
+    handleSpinner.create("Generating the changelog");
 
     const results = Object.assign({}, predefined, answers);
     const grouped = groupChanges(results, changeTypes);
@@ -319,13 +333,15 @@ const collectChanges = async (
     tags: Commit[],
     exists: number | false = false
 ) => {
-    createSpinner("Loading commit history");
+    handleSpinner.create("Loading commit history");
     let commits;
 
     try {
         commits = await getCommits(tags);
     } catch (err) {
-        fail(err.message);
+        handleSpinner.fail(
+            err instanceof Error ? err.message : JSON.stringify(err, null, 2)
+        );
     }
 
     for (const commit of commits.all) {
@@ -336,7 +352,7 @@ const collectChanges = async (
     }
 
     if (commits.length < 1) {
-        fail("No changes happened since the last release.");
+        handleSpinner.fail("No changes happened since the last release.");
     }
 
     orderCommits(commits, tags, exists);
@@ -355,23 +371,23 @@ const checkReleaseStatus = async () => {
                 new Date(a.date as any).valueOf()
         );
     } catch (err) {
-        fail("Directory is not a Git repository.");
+        handleSpinner.fail("Directory is not a Git repository.");
     }
 
     if (tags.length < 1) {
-        fail("No tags available for release.");
+        handleSpinner.fail("No tags available for release.");
     }
 
     const synced = await branchSynced();
 
     if (!synced) {
-        fail("Your branch needs to be up-to-date with origin.");
+        handleSpinner.fail("Your branch needs to be up-to-date with origin.");
     }
 
     githubConnection = await connect(flags.showUrl);
     repoDetails = await getRepo(githubConnection);
 
-    createSpinner("Checking if release already exists");
+    handleSpinner.create("Checking if release already exists");
 
     let response;
 
@@ -385,7 +401,7 @@ const checkReleaseStatus = async () => {
     }
 
     if (!response) {
-        fail("Couldn't check if release exists.");
+        handleSpinner.fail("Couldn't check if release exists.");
         return;
     }
 
@@ -409,20 +425,21 @@ const checkReleaseStatus = async () => {
     }
 
     if (flags.overwrite) {
-        global.spinner.text = "Overwriting release, because it already exists";
+        handleSpinner.spinner.text =
+            "Overwriting release, because it already exists";
         collectChanges(tags, existingRelease.id);
 
         return;
     }
 
-    global.spinner.succeed();
+    handleSpinner.spinner.succeed();
     console.log("");
 
     const releaseURL = getReleaseURL(existingRelease);
     const prefix = `Release already exists`;
 
     if (!releaseURL) {
-        logger.error(`Failed to find release URL.`);
+        handleSpinner.fail(`Failed to find release URL.`);
         return;
     }
 
@@ -455,7 +472,7 @@ const main = async () => {
         const type = bumpType[0];
 
         if (!allowed) {
-            fail(
+            handleSpinner.fail(
                 "Version type not SemVer-compatible " +
                     '("major", "minor", "patch" or "pre")'
             );

@@ -1,18 +1,21 @@
 // Packages
+import type { Ora } from "ora";
 import ora from "ora";
 import * as logger from "./logger.js";
 
+export let spinner: Ora;
+
 export const create = (message: string) => {
-    if (global.spinner) {
-        global.spinner.succeed();
+    if (spinner) {
+        spinner.succeed();
     }
 
-    global.spinner = ora(message).start();
+    spinner = ora(message).start();
 };
 
 export const fail = (message: string) => {
-    if (global.spinner) {
-        global.spinner.fail();
+    if (spinner) {
+        spinner.fail();
         console.log("");
     }
 

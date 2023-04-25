@@ -3,8 +3,7 @@ import repoName from "git-repo-name";
 import repoUser from "git-username";
 
 import type { GithubConnection, RepoDetails } from "../types.js";
-
-const handleSpinner = require("./spinner");
+import * as handleSpinner from "./spinner.js";
 
 export const getRepo = (githubConnection: GithubConnection): Promise<RepoDetails> => {
     return new Promise((resolve) => {

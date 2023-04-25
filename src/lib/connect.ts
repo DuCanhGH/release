@@ -1,18 +1,14 @@
-// Native
-
-// Packages
-const open = require("opn");
-const retry = require("async-retry");
-const sleep = require("delay");
-
-import { Octokit } from "@octokit/rest";
-import { fetch } from "undici";
 import querystring from "node:querystring";
 
+import { Octokit } from "@octokit/rest";
+import retry from "async-retry";
+import sleep from "delay";
+import open from "open";
+import { fetch } from "undici";
+
+import pkg from "../../package.json";
 import { generateString } from "./generate-string.js";
-// Utilities
-const pkg = require("../package");
-const handleSpinner = require("./spinner");
+import * as handleSpinner from "./spinner.js";
 
 const config: Record<string, string> = {};
 
@@ -22,7 +18,7 @@ const github = new Octokit({
     },
 });
 
-const tokenAPI = (state) =>
+const tokenAPI = (state: string) =>
     retry(
         () =>
             new Promise(async (resolve, reject) => {
@@ -91,7 +87,7 @@ const requestToken = async (showURL: string) => {
 
         open(authURL, { wait: false });
     } catch (err) {
-        global.spinner.stop();
+        handleSpinner.spinner.stop();
         console.log(`Please click this link to authenticate: ${authURL}`);
     }
 

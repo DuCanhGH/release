@@ -39,7 +39,7 @@ const getSemanticCommits = (refs: string): Commit[] => {
         .map((name) => ({
             tag: name,
             version: semver.valid(name) ?? "__null__",
-            hash: null,
+            hash: undefined,
             date: null,
         }))
         .filter((tag) => tag.version != "__null__");

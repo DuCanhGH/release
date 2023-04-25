@@ -10,6 +10,8 @@ export interface RepoDetails {
 export interface Commit {
   tag: string;
   version: string;
-  hash: string | null;
+  hash?: string;
   date: Date | null;
 }
+
+export type RequireFields<T, U extends keyof T> = T & Required<Pick<T, U>>;
